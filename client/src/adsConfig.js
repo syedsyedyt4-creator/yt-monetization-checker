@@ -1,20 +1,24 @@
 /**
- * Google AdSense Configuration
+ * Ad Monetization Configuration (Adsterra & High-Converting Creator Sponsors)
  * ----------------------------------------
- * Connected to verified AdSense account: ca-pub-8046276779791670
+ * User Account: syeddev001
+ * Adsterra Native Banner Unit ID: 6150232
  */
 export const ADS_CONFIG = {
-  // Your Google AdSense Publisher ID
+  // Google AdSense Publisher ID (ready whenever custom domain is connected)
   publisherId: 'ca-pub-8046276779791670',
+  enableGoogleAds: false, // Disabled on free subdomain to prevent blank boxes
 
-  // Google AdSense is now enabled
-  enableGoogleAds: true,
+  // Active Adsterra Network (Live & Approved for syeddev001)
+  adsterra: {
+    enabled: true,
+    nativeScriptUrl: 'https://bauval.org/21/e03220535c11e711d32c37c7a317b046',
+    containerId: 'container-e03220535c11e711d32c37c7a317b046'
+  },
 
-  // Ad Slot IDs (from AdSense dashboard > Ads > By ad unit > Display ads)
-  // If left empty, Google Auto Ads and responsive auto placements will be served!
   slots: {
-    topLeaderboard: '',     // e.g. '1234567890' (Responsive / 728x90)
-    inFeedResult: '',       // e.g. '2345678901' (In-article or Square)
-    footerLeaderboard: '',  // e.g. '3456789012' (Responsive footer banner)
+    topLeaderboard: '',
+    inFeedResult: '',
+    footerLeaderboard: ''
   }
 };

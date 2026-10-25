@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Sparkles, X, ShieldCheck } from 'lucide-react';
 import { ADS_CONFIG } from '../adsConfig';
 import { getAdSafetyStatus, initAdClickGuard } from '../utils/adFraudProtection';
@@ -6,6 +6,7 @@ import { getAdSafetyStatus, initAdClickGuard } from '../utils/adFraudProtection'
 export default function AdBanner({ type = 'leaderboard', slotId = '', className = '' }) {
   const [dismissed, setDismissed] = useState(false);
   const [safetyStatus, setSafetyStatus] = useState({ safe: true });
+  const adsterraRef = useRef(null);
 
   useEffect(() => {
     initAdClickGuard();
@@ -18,6 +19,19 @@ export default function AdBanner({ type = 'leaderboard', slotId = '', className 
         // Ignore duplicate push errors in dev
       }
     }
+
+    // Dynamic Adsterra Native Banner script execution
+    if (type === 'infeed' && ADS_CONFIG.adsterra?.enabled && adsterraRef.current) {
+      try {
+        if (!adsterraRef.current.querySelector('script')) {
+          const script = document.createElement('script');
+          script.async = true;
+          script.setAttribute('data-cfasync', 'false');
+          script.src = ADS_CONFIG.adsterra.nativeScriptUrl;
+          adsterraRef.current.appendChild(script);
+        }
+      } catch (e) {}
+    }
   }, [type]);
 
   if (dismissed) return null;
@@ -27,7 +41,26 @@ export default function AdBanner({ type = 'leaderboard', slotId = '', className 
     return null;
   }
 
-  // Live Google AdSense Rendering
+  // Active Adsterra Native Monetization (syeddev001 - Ad Unit 6150232)
+  if (type === 'infeed' && ADS_CONFIG.adsterra?.enabled) {
+    return (
+      <div className={`w-full max-w-5xl mx-auto my-6 px-4 ${className}`}>
+        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1 px-1">
+          <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-amber-400" /> Recommended For Creators</span>
+          <span className="text-[10px] text-gray-500 bg-gray-800/60 px-1.5 py-0.5 rounded border border-gray-700/50">Sponsored</span>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-gray-800/80 bg-gray-950/70 p-3 shadow-lg min-h-[110px] flex flex-col justify-center">
+          <div
+            id={ADS_CONFIG.adsterra.containerId}
+            ref={adsterraRef}
+            className="w-full"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Live Google AdSense Rendering (if enabled with custom domain)
   if (ADS_CONFIG.enableGoogleAds && ADS_CONFIG.publisherId !== 'ca-pub-XXXXXXXXXXXXXXXX') {
     const activeSlotId = slotId || (
       type === 'leaderboard' ? ADS_CONFIG.slots.topLeaderboard :
