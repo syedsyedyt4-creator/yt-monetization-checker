@@ -1,0 +1,29 @@
+{
+  "name": "yt-monetize-hub",
+  "version": "1.0.0",
+  "description": "YouTube Channel Monetization Checker, Faceless Niches & Trending Keywords Hub with AdSense Monetization",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "server": "node server/index.js",
+    "client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build"
+  },
+  "keywords": [
+    "youtube",
+    "monetization-checker",
+    "faceless-niches",
+    "adsense",
+    "keywords"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0"
+  }
+}
