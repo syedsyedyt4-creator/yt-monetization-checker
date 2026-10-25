@@ -3,7 +3,8 @@ import confetti from 'canvas-confetti';
 import {
   Search, CheckCircle2, XCircle, AlertTriangle, DollarSign,
   TrendingUp, Users, Video, ShieldCheck, Sparkles,
-  ExternalLink, ArrowRight, Loader2, Info, Eye, AlertCircle
+  ExternalLink, ArrowRight, Loader2, Info, Eye, AlertCircle,
+  ChevronDown, HelpCircle, BookOpen, Check
 } from 'lucide-react';
 import AdBanner from './AdBanner';
 
@@ -13,6 +14,11 @@ export default function ChannelChecker() {
   const [loadingStep, setLoadingStep] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [openFaq, setOpenFaq] = useState(null);
+
+  const toggleFaq = (index) => {
+    setOpenFaq(openFaq === index ? null : index);
+  };
 
   const triggerConfetti = () => {
     try {
@@ -332,6 +338,109 @@ export default function ChannelChecker() {
           <AdBanner type="infeed" className="mt-6" />
         </div>
       )}
+
+      {/* SEO Educational Guide & Knowledge Base */}
+      <div className="mt-14 pt-10 border-t border-gray-800/80">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold mb-2">
+            <BookOpen className="w-3.5 h-3.5" /> Complete Creator Guide
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            How to Check If a YouTube Channel is Monetized (2026 Guide)
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-400 max-w-2xl mx-auto mt-2 leading-relaxed">
+            Everything you need to know about YouTube Partner Program eligibility, ad inventory tags, and how to verify channel monetization status accurately.
+          </p>
+        </div>
+
+        {/* 3 Step Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+          <div className="p-4 rounded-xl border border-gray-800 bg-gray-900/60">
+            <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 font-bold text-sm mb-3">
+              1
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1.5">Copy Channel or Video Link</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Copy any channel URL, handle (e.g. <code className="text-red-400">@MrBeast</code>), or direct video link from YouTube.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-800 bg-gray-900/60">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm mb-3">
+              2
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1.5">Deep Ad Telemetry Scan</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Our automated engine inspects active Google AdSense ad units (<code className="text-amber-400">adPlacementRenderer</code>), video ad breaks, and YPP status.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-800 bg-gray-900/60">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm mb-3">
+              3
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1.5">Instant Revenue & Signals Report</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              View guaranteed monetization badge, confidence score, estimated monthly earnings, and detailed compliance breakdown.
+            </p>
+          </div>
+        </div>
+
+        {/* Interactive FAQ Accordion */}
+        <div className="max-w-3xl mx-auto mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <HelpCircle className="w-4 h-4 text-red-400" />
+            <h3 className="text-lg font-bold text-white">Frequently Asked Questions</h3>
+          </div>
+
+          <div className="space-y-3">
+            {[
+              {
+                q: 'How to check if a YouTube channel is monetized?',
+                a: 'Simply paste any YouTube channel handle (@username), channel link, or video URL into our search bar above and click "Check Channel". Our tool scans live ad placement containers (adPlacementRenderer), Google AdSense tags, and YouTube Partner Program thresholds in seconds.'
+              },
+              {
+                q: 'What are the official requirements for YouTube monetization in 2026?',
+                a: 'To qualify for ad revenue sharing under the YouTube Partner Program (YPP), creators must have: (1) At least 1,000 subscribers, (2) Either 4,000 valid public watch hours in the past 12 months OR 10 million valid Shorts views in the last 90 days, (3) An active Google AdSense account with no active Community Guidelines strikes.'
+              },
+              {
+                q: 'Why are some channels with over 100k subscribers NOT monetized?',
+                a: 'This commonly happens with anime edits, movie clip channels, reused TikTok clips, or copyright-claimed music channels. Under YouTube\'s Reused Content and Repetitive Content policies, channels without significant original commentary, transformative editing, or authentic educational value are routinely denied monetization or demonetized.'
+              },
+              {
+                q: 'How does our YouTube Monetization Checker detect monetization?',
+                a: 'Our algorithm performs multi-signal verification: (1) Official YouTube Verified Partner status, (2) Real-time video streaming ad parameters (yt_ad flag), (3) Video player ad inventory containers (adPlacementRenderer), and (4) Channel membership and creator perks.'
+              },
+              {
+                q: 'How much money does a monetized YouTube channel make?',
+                a: 'Earnings depend on RPM (Revenue Per Mille - earnings per 1,000 views). Standard entertainment channels average $2.00 - $5.00 RPM, while high-CPM niches (finance, tech, AI, business) earn $12.00 - $35.00+ RPM. You can use our interactive YouTube Revenue Calculator above to simulate exact earnings.'
+              }
+            ].map((faq, idx) => (
+              <div
+                key={idx}
+                className="border border-gray-800/80 rounded-xl bg-gray-900/50 overflow-hidden transition"
+              >
+                <button
+                  onClick={() => toggleFaq(idx)}
+                  className="w-full px-4 py-3.5 text-left flex items-center justify-between text-xs sm:text-sm font-semibold text-gray-200 hover:text-white transition"
+                >
+                  <span>{faq.q}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ml-2 ${
+                      openFaq === idx ? 'rotate-180 text-red-400' : ''
+                    }`}
+                  />
+                </button>
+                {openFaq === idx && (
+                  <div className="px-4 pb-4 pt-1 text-xs text-gray-400 leading-relaxed border-t border-gray-800/50 bg-gray-950/40">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
