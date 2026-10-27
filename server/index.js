@@ -122,6 +122,11 @@ app.post('/api/contact', (req, res) => {
 });
 
 // Dedicated handlers for Google AdSense & Search Engine crawlers
+app.get('/googlef2678dbd6cd77d20.html', (req, res) => {
+  res.type('text/html');
+  res.send('google-site-verification: googlef2678dbd6cd77d20.html\n');
+});
+
 app.get('/google270dca71141ac4ab.html', (req, res) => {
   res.type('text/html');
   res.send('google-site-verification: google270dca71141ac4ab.html\n');
