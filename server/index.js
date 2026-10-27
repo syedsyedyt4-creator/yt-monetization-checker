@@ -174,4 +174,15 @@ app.use((req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Monetization Checker API & Server running on http://localhost:${PORT}`);
+
+  // Keep-Alive Self-Ping: Prevents Render free tier from sleeping so Google crawlers never time out
+  const siteUrl = process.env.RENDER_EXTERNAL_URL || 'https://yt-monetization-checker.onrender.com';
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${siteUrl}/ads.txt`);
+      console.log(`[Keep-Alive] Pinged ${siteUrl}/ads.txt - Status: ${res.status}`);
+    } catch (err) {
+      console.error('[Keep-Alive] Ping error:', err.message);
+    }
+  }, 8 * 60 * 1000); // Ping every 8 minutes (Render sleeps after 15m)
 });
