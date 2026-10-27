@@ -100,18 +100,24 @@ export async function analyzeVideoPage(videoId) {
     // 2. Active creator ad placement renderer
     const hasAdPlacementRenderer = html.includes('adPlacementRenderer');
 
-    // 3. Active player ads array or ad heartbeat
-    const hasPlayerAds = (html.includes('"playerAds":[') && !html.includes('"playerAds":[]')) ||
-                         html.includes('adBreakHeartbeatParams');
+    // 3. Active player ads array
+    const hasPlayerAds = (html.includes('"playerAds":[') && !html.includes('"playerAds":[]'));
 
     // 4. Real-time yt_ad flag
     const ytAdMatch = html.match(/["']yt_ad["']\s*:\s*["']?(\d+)["']/);
     const ytAdKeyMatch = html.match(/["']key["']:\s*["']yt_ad["'],\s*["']value["']:\s*["'](\d+)["']/);
     const ytAdActive = (ytAdMatch && ytAdMatch[1] === '1') || (ytAdKeyMatch && ytAdKeyMatch[1] === '1');
 
+    // 5. Ad break heartbeat telemetry & playback tracking (Present on monetized uploads & monetized Shorts)
+    const hasAdHeartbeat = html.includes('adBreakHeartbeatParams');
+    const hasPlaybackTracking = html.includes('ptracking') && html.includes('atrUrl');
+
     // Extract video title
     const titleMatch = html.match(/<meta property="og:title" content="([^"]+)">/) || html.match(/<title>([^<]+)<\/title>/);
     let title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'Latest Upload';
+
+    // Detect unmonetizable anime/music edit tags (commonly demonetized under Reused Content)
+    const isCopyrightEdit = html.includes('#edit') || html.includes('#amv') || html.includes('#animeedit') || title.toLowerCase().includes('#edit');
 
     // Extract channel info from video page
     const channelIdMatch = html.match(/"channelId":\s*"([^"]+)"/) || html.match(/channel_id=([a-zA-Z0-9_-]+)/);
@@ -120,10 +126,16 @@ export async function analyzeVideoPage(videoId) {
 
     // Monetization determination:
     // A video is monetized if:
-    // - It has adPlacements with adPlacementRenderer OR
-    // - It has playerAds OR
-    // - It has both adPlacements array AND ytAdActive === true
-    const isMonetized = (hasAdPlacements && hasAdPlacementRenderer) || hasPlayerAds || (hasAdPlacements && ytAdActive);
+    // 1. Active video ad inventory containers:
+    //    (hasAdPlacements && hasAdPlacementRenderer) OR hasPlayerAds OR (hasAdPlacements && ytAdActive)
+    // 2. Shorts ad revenue pool:
+    //    hasAdHeartbeat && hasPlaybackTracking (provided it is not an unmonetized edit)
+    let isMonetized = false;
+    if ((hasAdPlacements && hasAdPlacementRenderer) || hasPlayerAds || (hasAdPlacements && ytAdActive)) {
+      isMonetized = true;
+    } else if (hasAdHeartbeat && hasPlaybackTracking && !isCopyrightEdit) {
+      isMonetized = true;
+    }
 
     return {
       videoId,
@@ -136,7 +148,9 @@ export async function analyzeVideoPage(videoId) {
         hasAdPlacements: !!hasAdPlacements,
         hasAdPlacementRenderer: !!hasAdPlacementRenderer,
         hasPlayerAds: !!hasPlayerAds,
-        ytAdActive: !!ytAdActive
+        ytAdActive: !!ytAdActive,
+        hasAdHeartbeat: !!hasAdHeartbeat,
+        hasPlaybackTracking: !!hasPlaybackTracking
       }
     };
   } catch (err) {
@@ -249,22 +263,7 @@ export async function checkChannelMonetization(userInput) {
     }
   }
 
-  // 2. Official Verified Creator: YouTube grants the Verified checkmark ONLY to channels with >= 100,000 subscribers
-  // who have passed identity and partner verification. These creators are active YouTube Partners.
-  if (channelInfo.isVerified && rawSubs >= 100000) {
-    isMonetized = true;
-    if (videoTested) {
-      videoTested.isMonetized = true;
-      videoTested.details = {
-        hasAdPlacements: true,
-        hasAdPlacementRenderer: true,
-        hasPlayerAds: true,
-        ytAdActive: true
-      };
-    }
-  }
-
-  // 3. Fallback video title if video title is missing or default
+  // 2. Fallback video title if video title is missing or default
   if (videoTested && (!videoTested.title || videoTested.title === 'Latest Upload' || videoTested.title === 'Upload')) {
     try {
       const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoTested.id}&format=json`);
