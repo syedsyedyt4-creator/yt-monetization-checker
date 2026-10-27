@@ -93,14 +93,16 @@ export async function analyzeVideoPage(videoId) {
     }
     const html = await res.text();
 
-    // 1. YouTube Partner Program Ad Placements (Non-empty array)
-    const hasAdPlacements = html.includes('"adPlacements":[') && !html.includes('"adPlacements":[]');
+    // 1. YouTube Partner Program Ad Placements (Non-empty array or config)
+    const hasAdPlacements = (html.includes('"adPlacements":[') && !html.includes('"adPlacements":[]')) ||
+                            html.includes('adPlacementConfig');
     
     // 2. Active creator ad placement renderer
     const hasAdPlacementRenderer = html.includes('adPlacementRenderer');
 
-    // 3. Active player ads array
-    const hasPlayerAds = html.includes('"playerAds":[') && !html.includes('"playerAds":[]');
+    // 3. Active player ads array or ad heartbeat
+    const hasPlayerAds = (html.includes('"playerAds":[') && !html.includes('"playerAds":[]')) ||
+                         html.includes('adBreakHeartbeatParams');
 
     // 4. Real-time yt_ad flag
     const ytAdMatch = html.match(/["']yt_ad["']\s*:\s*["']?(\d+)["']/);
@@ -369,8 +371,13 @@ async function fetchChannelInfo(url) {
   // Check Join / Memberships button
   const hasJoinButton = html.includes('ytd-sponsor-button-renderer') || html.includes('"sponsorButton"');
 
-  // Check verified badge
-  const isVerified = html.includes('BADGE_STYLE_TYPE_VERIFIED') || html.includes('"label":"Verified"');
+  // Check verified badge (Supports modern 2024-2026 YouTube schemas and legacy badges)
+  const isVerified = html.includes('BADGE_STYLE_TYPE_VERIFIED') ||
+                     html.includes('BADGE_STYLE_TYPE_VERIFIED_ARTIST') ||
+                     html.includes('"label":"Verified"') ||
+                     html.includes('"accessibilityLabel":"Verified"') ||
+                     html.includes('CHECK_CIRCLE_FILLED') ||
+                     html.includes('official-artist');
 
   // Extract recent video IDs (both /watch?v= and /shorts/)
   const watchMatches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)].map(m => m[1]);
