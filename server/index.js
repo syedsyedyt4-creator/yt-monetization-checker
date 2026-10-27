@@ -121,6 +121,32 @@ app.post('/api/contact', (req, res) => {
   return res.json({ success: true, message: 'Thank you! Your message has been received. Our team will get back to you shortly.' });
 });
 
+// Temporary diagnostic endpoint to inspect YouTube responses on Render
+app.get('/api/debug-video', async (req, res) => {
+  const v = req.query.v || '7aRd_wxTD64';
+  try {
+    const r = await fetch(`https://www.youtube.com/watch?v=${v}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+478; SOCS=CAESEwgDEgk0ODEzNzg5MjQaAmVuIAEaBgiA_LyaBg;'
+      }
+    });
+    const text = await r.text();
+    res.json({
+      status: r.status,
+      length: text.length,
+      hasAdPlacements: text.includes('adPlacements'),
+      hasAdPlacementRenderer: text.includes('adPlacementRenderer'),
+      hasAdHeartbeat: text.includes('adBreakHeartbeatParams'),
+      hasYtAd: text.includes('yt_ad'),
+      preview: text.substring(0, 200).replace(/\n/g, ' ')
+    });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 // Dedicated handlers for Google AdSense & Search Engine crawlers
 app.get('/googlef2678dbd6cd77d20.html', (req, res) => {
   res.type('text/html');
