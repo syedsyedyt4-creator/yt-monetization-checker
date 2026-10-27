@@ -5,6 +5,7 @@ import ChannelChecker from './components/ChannelChecker';
 import FacelessNiches from './components/FacelessNiches';
 import TrendingKeywords from './components/TrendingKeywords';
 import RevenueCalculator from './components/RevenueCalculator';
+import SeoComparisonMatrix from './components/SeoComparisonMatrix';
 import Footer from './components/Footer';
 import ComplianceModal from './components/ComplianceModal';
 import CookieBanner from './components/CookieBanner';
@@ -55,6 +56,9 @@ export default function App() {
 
         {/* Section 4: Interactive YouTube Revenue Calculator */}
         <RevenueCalculator />
+
+        {/* Section 5: SEO Comparison Matrix & Generative Engine Optimization (GEO) */}
+        <SeoComparisonMatrix />
       </main>
 
       {/* Footer & Compliance Links */}
