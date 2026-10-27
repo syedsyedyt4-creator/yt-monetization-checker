@@ -125,22 +125,43 @@ app.post('/api/contact', (req, res) => {
 app.get('/api/debug-video', async (req, res) => {
   const v = req.query.v || '7aRd_wxTD64';
   try {
-    const r = await fetch(`https://www.youtube.com/watch?v=${v}`, {
+    // 1. Test InnerTube API
+    const playerRes = await fetch('https://www.youtube.com/youtubei/v1/player', {
+      method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+478; SOCS=CAESEwgDEgk0ODEzNzg5MjQaAmVuIAEaBgiA_LyaBg;'
-      }
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240410.01.00',
+            hl: 'en',
+            gl: 'US'
+          }
+        },
+        videoId: v
+      })
     });
-    const text = await r.text();
+    const playerData = playerRes.ok ? await playerRes.json() : null;
+
+    // 2. Test embed page
+    const embedRes = await fetch(`https://www.youtube.com/embed/${v}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+    const embedText = await embedRes.text();
+
     res.json({
-      status: r.status,
-      length: text.length,
-      hasAdPlacements: text.includes('adPlacements'),
-      hasAdPlacementRenderer: text.includes('adPlacementRenderer'),
-      hasAdHeartbeat: text.includes('adBreakHeartbeatParams'),
-      hasYtAd: text.includes('yt_ad'),
-      preview: text.substring(0, 200).replace(/\n/g, ' ')
+      videoId: v,
+      playerStatus: playerRes.status,
+      playerHasHeartbeat: !!playerData?.adBreakHeartbeatParams,
+      playerTitle: playerData?.videoDetails?.title,
+      embedStatus: embedRes.status,
+      embedLength: embedText.length,
+      embedHasAdPlacements: embedText.includes('adPlacements'),
+      embedHasAdPlacementRenderer: embedText.includes('adPlacementRenderer'),
+      embedHasHeartbeat: embedText.includes('adBreakHeartbeatParams')
     });
   } catch(e) {
     res.json({ error: e.message });
