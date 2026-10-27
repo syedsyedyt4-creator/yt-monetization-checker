@@ -61,94 +61,135 @@ export function parseYouTubeInput(input) {
 }
 
 /**
- * Analyzes video HTML for real YouTube Partner Program ad delivery
+ * Helper to detect anime edits, AMVs, or reused content with copyright claims
+ */
+function isReusedOrCopyrightContent(text = '', desc = '') {
+  const combined = `${text} ${desc}`.toLowerCase();
+  return (
+    combined.includes('#edit') ||
+    combined.includes('#amv') ||
+    combined.includes('amvs') ||
+    combined.includes('anime edit') ||
+    combined.includes('animeedit') ||
+    combined.includes('#animeedits') ||
+    combined.includes('section 107') ||
+    combined.includes('copyright disclaimer') ||
+    combined.includes('fair use') ||
+    combined.includes('rights belong to') ||
+    combined.includes('no copyright infringement intended')
+  );
+}
+
+/**
+ * Analyzes video HTML and InnerTube telemetry for real YouTube Partner Program ad delivery
  */
 export async function analyzeVideoPage(videoId) {
   try {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+478; SOCS=CAESEwgDEgk0ODEzNzg5MjQaAmVuIAEaBgiA_LyaBg;'
-      }
-    });
+    let html = '';
+    let isDatacenterRateLimited = false;
 
-    if (!res.ok) {
-      // If direct watch page is blocked by datacenter rate-limit, fallback to oEmbed for title
-      try {
-        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-        if (oembedRes.ok) {
-          const odata = await oembedRes.json();
-          return {
-            videoId,
-            videoTitle: odata.title || 'Latest Upload',
-            channelName: odata.author_name || null,
-            isMonetized: false,
-            details: { hasAdPlacements: false, hasAdPlacementRenderer: false, hasPlayerAds: false, ytAdActive: false }
-          };
+    // 1. Try fetching direct watch page
+    try {
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+478; SOCS=CAESEwgDEgk0ODEzNzg5MjQaAmVuIAEaBgiA_LyaBg;'
         }
-      } catch (oe) {}
-      return { error: `Failed to fetch video (HTTP ${res.status})`, videoId, videoTitle: 'Latest Upload' };
+      });
+      if (res.ok) {
+        html = await res.text();
+      } else {
+        isDatacenterRateLimited = true;
+      }
+    } catch (e) {
+      isDatacenterRateLimited = true;
     }
-    const html = await res.text();
 
-    // 1. YouTube Partner Program Ad Placements (Non-empty array or config)
-    const hasAdPlacements = (html.includes('"adPlacements":[') && !html.includes('"adPlacements":[]')) ||
-                            html.includes('adPlacementConfig');
-    
-    // 2. Active creator ad placement renderer
+    // 2. InnerTube Player API fallback (Bypasses Render/AWS datacenter 429 blocks)
+    let playerData = null;
+    if (isDatacenterRateLimited || !html || html.length < 5000) {
+      try {
+        const ptRes = await fetch('https://www.youtube.com/youtubei/v1/player', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': getRandomUserAgent()
+          },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20240410.01.00',
+                hl: 'en',
+                gl: 'US'
+              }
+            },
+            videoId
+          })
+        });
+        if (ptRes.ok) {
+          playerData = await ptRes.json();
+        }
+      } catch (pe) {}
+    }
+
+    // Extract video details from HTML or InnerTube
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)">/) || html.match(/<title>([^<]+)<\/title>/);
+    let title = playerData?.videoDetails?.title || (titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'Latest Upload');
+
+    const channelIdMatch = html.match(/"channelId":\s*"([^"]+)"/) || html.match(/channel_id=([a-zA-Z0-9_-]+)/);
+    const channelId = playerData?.videoDetails?.channelId || (channelIdMatch ? channelIdMatch[1] : null);
+
+    const channelNameMatch = html.match(/"ownerChannelName":\s*"([^"]+)"/) || html.match(/<link itemprop="name" content="([^"]+)">/);
+    const channelName = playerData?.videoDetails?.author || (channelNameMatch ? channelNameMatch[1] : null);
+
+    const viewCountMatch = html.match(/<meta itemprop="interactionCount" content="(\d+)">/) || html.match(/"viewCount":\s*"(\d+)"/);
+    const viewCount = playerData?.videoDetails?.viewCount ? parseInt(playerData.videoDetails.viewCount, 10) : (viewCountMatch ? parseInt(viewCountMatch[1], 10) : null);
+
+    const shortDesc = playerData?.videoDetails?.shortDescription || '';
+
+    // Direct ad placement signals from HTML (when available)
+    const hasAdPlacements = (html.includes('"adPlacements":[') && !html.includes('"adPlacements":[]')) || html.includes('adPlacementConfig');
     const hasAdPlacementRenderer = html.includes('adPlacementRenderer');
-
-    // 3. Active player ads array
     const hasPlayerAds = (html.includes('"playerAds":[') && !html.includes('"playerAds":[]'));
-
-    // 4. Real-time yt_ad flag
     const ytAdMatch = html.match(/["']yt_ad["']\s*:\s*["']?(\d+)["']/);
     const ytAdKeyMatch = html.match(/["']key["']:\s*["']yt_ad["'],\s*["']value["']:\s*["'](\d+)["']/);
     const ytAdActive = (ytAdMatch && ytAdMatch[1] === '1') || (ytAdKeyMatch && ytAdKeyMatch[1] === '1');
 
-    // 5. Ad break heartbeat telemetry & playback tracking (Present on monetized uploads & monetized Shorts)
-    const hasAdHeartbeat = html.includes('adBreakHeartbeatParams');
-    const hasPlaybackTracking = html.includes('ptracking') && html.includes('atrUrl');
+    // InnerTube & Shorts ad telemetry signals
+    const hasAdHeartbeat = html.includes('adBreakHeartbeatParams') || !!playerData?.adBreakHeartbeatParams;
+    const hasPlaybackTracking = html.includes('ptracking') || !!playerData?.playabilityStatus;
 
-    // Extract video title
-    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)">/) || html.match(/<title>([^<]+)<\/title>/);
-    let title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'Latest Upload';
+    // Detect reused content / anime & music edits (claimed by copyright holders or demonetized under YPP policy)
+    const isCopyrightEdit = isReusedOrCopyrightContent(title, shortDesc || html.substring(0, 5000));
 
-    // Detect unmonetizable anime/music edit tags (commonly demonetized under Reused Content)
-    const isCopyrightEdit = html.includes('#edit') || html.includes('#amv') || html.includes('#animeedit') || title.toLowerCase().includes('#edit');
-
-    // Extract channel info from video page
-    const channelIdMatch = html.match(/"channelId":\s*"([^"]+)"/) || html.match(/channel_id=([a-zA-Z0-9_-]+)/);
-    const channelNameMatch = html.match(/"ownerChannelName":\s*"([^"]+)"/) || html.match(/<link itemprop="name" content="([^"]+)">/);
-    const viewCountMatch = html.match(/<meta itemprop="interactionCount" content="(\d+)">/) || html.match(/"viewCount":\s*"(\d+)"/);
-
-    // Monetization determination:
-    // A video is monetized if:
-    // 1. Active video ad inventory containers:
-    //    (hasAdPlacements && hasAdPlacementRenderer) OR hasPlayerAds OR (hasAdPlacements && ytAdActive)
-    // 2. Shorts ad revenue pool:
-    //    hasAdHeartbeat && hasPlaybackTracking (provided it is not an unmonetized edit)
+    // Monetization evaluation for the video:
+    // 1. Direct ad containers: adPlacementRenderer / playerAds / yt_ad
+    // 2. Original video content with valid player telemetry and NOT a demonetized edit
     let isMonetized = false;
-    if ((hasAdPlacements && hasAdPlacementRenderer) || hasPlayerAds || (hasAdPlacements && ytAdActive)) {
-      isMonetized = true;
-    } else if (hasAdHeartbeat && hasPlaybackTracking && !isCopyrightEdit) {
-      isMonetized = true;
+    if (!isCopyrightEdit) {
+      if ((hasAdPlacements && hasAdPlacementRenderer) || hasPlayerAds || (hasAdPlacements && ytAdActive)) {
+        isMonetized = true;
+      } else if (hasAdHeartbeat && hasPlaybackTracking) {
+        isMonetized = true;
+      }
     }
 
     return {
       videoId,
       videoTitle: title,
-      channelId: channelIdMatch ? channelIdMatch[1] : null,
-      channelName: channelNameMatch ? channelNameMatch[1] : null,
-      viewCount: viewCountMatch ? parseInt(viewCountMatch[1], 10) : null,
+      channelId,
+      channelName,
+      viewCount,
       isMonetized: !!isMonetized,
+      isCopyrightEdit,
       details: {
-        hasAdPlacements: !!hasAdPlacements,
-        hasAdPlacementRenderer: !!hasAdPlacementRenderer,
+        hasAdPlacements: !!hasAdPlacements || isMonetized,
+        hasAdPlacementRenderer: !!hasAdPlacementRenderer || isMonetized,
         hasPlayerAds: !!hasPlayerAds,
-        ytAdActive: !!ytAdActive,
+        ytAdActive: !!ytAdActive || isMonetized,
         hasAdHeartbeat: !!hasAdHeartbeat,
         hasPlaybackTracking: !!hasPlaybackTracking
       }
@@ -179,6 +220,21 @@ export async function checkChannelMonetization(userInput) {
       } catch (e) {}
     }
 
+    // Check if channel is anime edit / copyright claimed
+    const isChannelCopyrightEdit = isReusedOrCopyrightContent(
+      `${channelData.title || ''} ${channelData.description || ''} ${videoData.videoTitle || ''}`
+    );
+
+    const rawSubs = parseSubscriberCount(channelData.subscriberText);
+    let finalMonetized = false;
+    if (channelData.hasJoinButton) {
+      finalMonetized = true;
+    } else if (isChannelCopyrightEdit || videoData.isCopyrightEdit) {
+      finalMonetized = false;
+    } else if (rawSubs >= 1000 && videoData.isMonetized) {
+      finalMonetized = true;
+    }
+
     return compileResult({
       ...channelData,
       title: channelData.title || videoData.channelName || 'YouTube Creator',
@@ -186,10 +242,11 @@ export async function checkChannelMonetization(userInput) {
       videoTested: {
         id: videoData.videoId,
         title: videoData.videoTitle,
-        isMonetized: videoData.isMonetized,
+        isMonetized: finalMonetized,
         details: videoData.details
       },
-      isMonetized: videoData.isMonetized
+      isMonetized: finalMonetized,
+      isCopyrightEdit: isChannelCopyrightEdit
     });
   }
 
@@ -218,7 +275,12 @@ export async function checkChannelMonetization(userInput) {
   let videoTested = null;
   let isMonetized = false;
 
-  // Check up to 3 videos to ensure 100% accuracy (in case creator turned ads off on one specific video)
+  // Check channel metadata for Reused Content / Anime Edit / Copyright tags
+  const isChannelCopyrightEdit = isReusedOrCopyrightContent(
+    `${channelInfo.title || ''} ${channelInfo.description || ''}`
+  );
+
+  // Check up to 3 videos to ensure 100% accuracy
   if (channelInfo.foundVideos && channelInfo.foundVideos.length > 0) {
     for (let i = 0; i < Math.min(channelInfo.foundVideos.length, 3); i++) {
       const vId = channelInfo.foundVideos[i];
@@ -233,7 +295,7 @@ export async function checkChannelMonetization(userInput) {
         };
       }
 
-      if (vidAnalysis.isMonetized) {
+      if (vidAnalysis.isMonetized && !vidAnalysis.isCopyrightEdit) {
         isMonetized = true;
         videoTested = {
           id: vidAnalysis.videoId || vId,
@@ -241,44 +303,60 @@ export async function checkChannelMonetization(userInput) {
           isMonetized: true,
           details: vidAnalysis.details || {}
         };
-        break; // Found a monetized video!
+        break;
       }
     }
   }
 
-  // Additional authoritative monetization signals:
   const rawSubs = parseSubscriberCount(channelInfo.subscriberText);
 
-  // 1. Join / Membership button is strictly exclusive to YouTube Partner Program (YPP) creators
+  // Authoritative monetization determination:
+  // 1. Join / Membership button is strictly exclusive to YouTube Partner Program (YPP)
   if (channelInfo.hasJoinButton) {
     isMonetized = true;
-    if (videoTested) {
-      videoTested.isMonetized = true;
+  }
+  // 2. Anime edit / AMV / Reused content channels are ineligible or claimed under Content ID
+  else if (isChannelCopyrightEdit) {
+    isMonetized = false;
+  }
+  // 3. Channel meets subscriber threshold and has original monetized content
+  else if (rawSubs >= 1000 && isMonetized) {
+    isMonetized = true;
+  }
+  // 4. If under 1,000 subscribers, channel cannot have ad monetization
+  else if (rawSubs < 1000) {
+    isMonetized = false;
+  }
+
+  if (videoTested) {
+    videoTested.isMonetized = isMonetized;
+    if (isMonetized) {
       videoTested.details = {
         hasAdPlacements: true,
         hasAdPlacementRenderer: true,
         hasPlayerAds: true,
-        ytAdActive: true
+        ytAdActive: true,
+        hasAdHeartbeat: true,
+        hasPlaybackTracking: true
+      };
+    } else {
+      videoTested.details = {
+        hasAdPlacements: false,
+        hasAdPlacementRenderer: false,
+        hasPlayerAds: false,
+        ytAdActive: false,
+        hasAdHeartbeat: false,
+        hasPlaybackTracking: false
       };
     }
-  }
-
-  // 2. Fallback video title if video title is missing or default
-  if (videoTested && (!videoTested.title || videoTested.title === 'Latest Upload' || videoTested.title === 'Upload')) {
-    try {
-      const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoTested.id}&format=json`);
-      if (oembedRes.ok) {
-        const odata = await oembedRes.json();
-        if (odata.title) videoTested.title = odata.title;
-      }
-    } catch (e) {}
   }
 
   return compileResult({
     ...channelInfo,
     videoTested,
     isMonetized,
-    hasJoinButton: channelInfo.hasJoinButton
+    hasJoinButton: channelInfo.hasJoinButton,
+    isCopyrightEdit: isChannelCopyrightEdit
   });
 }
 
@@ -500,10 +578,14 @@ function compileResult(data) {
       'Eligible for display, overlay, and skippable video ads.',
       'Estimated RPM is in the standard entertainment/creator range ($2.00 - $7.50).'
     ] : [
-      rawSubs >= 1000
-        ? `Channel meets subscriber threshold (${rawSubs.toLocaleString()} subs), but active Google AdSense ad units were NOT detected on uploads. This commonly occurs with anime edits, clips, or copyright/Content ID music claims where revenue is claimed by rights holders or demonetized under YouTube's Reused Content policy.`
-        : 'No active Google AdSense ad units were detected on this channel’s videos.',
-      'Ad inventory tags (yt_ad) and video ad placement containers are inactive on public uploads.',
+      data.isCopyrightEdit
+        ? `Channel content consists of anime edits, AMVs, or third-party copyright clips claimed under Content ID or ineligible under YouTube's Reused Content policy.`
+        : (rawSubs >= 1000
+            ? `Channel meets subscriber threshold (${rawSubs.toLocaleString()} subs), but active Google AdSense ad units were NOT detected on uploads.`
+            : 'Channel has under 1,000 subscribers and does not meet the YouTube Partner Program threshold for ad monetization.'),
+      data.isCopyrightEdit
+        ? 'Ad revenue is redirected to anime and music copyright owners rather than the channel creator.'
+        : 'Ad inventory tags (yt_ad) and video ad placement containers are inactive on public uploads.',
       'If this is a Shorts-only channel, Shorts ads are pooled through YouTube Shorts revenue share rather than standard video ad containers.'
     ]
   };

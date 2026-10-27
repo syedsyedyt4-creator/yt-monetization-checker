@@ -121,53 +121,6 @@ app.post('/api/contact', (req, res) => {
   return res.json({ success: true, message: 'Thank you! Your message has been received. Our team will get back to you shortly.' });
 });
 
-// Temporary diagnostic endpoint to inspect YouTube responses on Render
-app.get('/api/debug-video', async (req, res) => {
-  const v = req.query.v || '7aRd_wxTD64';
-  try {
-    // 1. Test InnerTube API
-    const playerRes = await fetch('https://www.youtube.com/youtubei/v1/player', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB',
-            clientVersion: '2.20240410.01.00',
-            hl: 'en',
-            gl: 'US'
-          }
-        },
-        videoId: v
-      })
-    });
-    const playerData = playerRes.ok ? await playerRes.json() : null;
-
-    // 2. Test embed page
-    const embedRes = await fetch(`https://www.youtube.com/embed/${v}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    });
-    const embedText = await embedRes.text();
-
-    res.json({
-      videoId: v,
-      playerStatus: playerRes.status,
-      playerHasHeartbeat: !!playerData?.adBreakHeartbeatParams,
-      playerTitle: playerData?.videoDetails?.title,
-      embedStatus: embedRes.status,
-      embedLength: embedText.length,
-      embedHasAdPlacements: embedText.includes('adPlacements'),
-      embedHasAdPlacementRenderer: embedText.includes('adPlacementRenderer'),
-      embedHasHeartbeat: embedText.includes('adBreakHeartbeatParams')
-    });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
 // Dedicated handlers for Google AdSense & Search Engine crawlers
 app.get('/googlef2678dbd6cd77d20.html', (req, res) => {
   res.type('text/html');
